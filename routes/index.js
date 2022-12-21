@@ -9,7 +9,8 @@ const readline = require('readline');
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-  res.render('index', { title: 'Express' });
+    main(res, req);
+    // res.render('index', { title: 'Express' });
 });
 
 const urlBase = 'https://jsonplaceholder.typicode.com/';
@@ -25,6 +26,7 @@ const getReadlinePromise = (query) => {
 }
 
 let userId;
+const commentsLimit = 5;
 
 // const getUserId =  async (Type) => {
 //   const query = "Enter userId";
@@ -36,7 +38,7 @@ let userId;
 // getUserId(Number)
 //     .then((r) => console.log("R ", r));
 
-const main =  async () => {
+const main =  async (res, req) => {
   const type = Number;
   const query = "Enter userId";
 
@@ -55,13 +57,76 @@ const main =  async () => {
     headers: {"Accept-Encoding": "gzip,deflate,compress"}
   };
 
+  const applyCommentsLimit = (commentsByPostIdUrl) => {
+      return `${commentsByPostIdUrl}&_limit=${commentsLimit}`;
+  };
+
+  const getLimitedCommentsUrl = (commentsByPostIdUrl) => {
+      return applyCommentsLimit(commentsByPostIdUrl);
+  };
+
+  const getCommentsByPostIdUrl = (postId) => {
+      return `${urlBase}comments?postId=${postId}`;
+  };
+
+  const getCommentsEndpoint = (postId) => {
+      return getLimitedCommentsUrl(getCommentsByPostIdUrl(postId))
+  }
+
+  const getAxiosRequest = (endpoint) => {
+        return axios.get(endpoint, config);
+  };
+
   const posts = axios.get(postsByUserIdUrl, config)
-      .then(r => console.log(r.data))
+      .then(posts => {
+        posts = posts.data;
+
+        // let commentsByPostId = [];
+        //   let commentsByPostId = new Map();
+          // let comments
+          let postMap = new Map();
+          let resJson = [];
+
+          posts.forEach(post => {
+              postMap.set(post.id, post);
+          });
+
+          const parallelAxiosCommentsRequests = posts.map((post) => getAxiosRequest(getCommentsEndpoint(post.id)));
+
+        axios.all(parallelAxiosCommentsRequests)
+            .then(axios.spread((...commentsResponses) => {
+                if (commentsResponses.length !== postMap.size) {
+                    console.log("ERROR WITH CAPACITIES");
+                }
+
+                commentsResponses = commentsResponses.map((response) => response.data);
+
+                commentsResponses.forEach((response, index) => {
+                    console.log(index);
+                    let postId = index + 1;
+                  if (response) {
+                      let post = postMap.get(postId);
+                      if (post) {
+                          post = {...post, "comments": response};
+                          resJson.push(post);
+                      }
+                  }
+
+              });
+              res.json(resJson);
+            }))
+            .catch(errors => {
+              console.log("ERROR ", errors);
+            });
+
+
+
+      })
       .catch((err) => console.log("ERROR ", err));
 
 }
 
-main();
+// main();
 
 
 
