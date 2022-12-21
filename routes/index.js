@@ -12,7 +12,7 @@ let userId;
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-    main(res, req);
+    endpoint(res, req);
 });
 
 const getReadlinePromise = (query) => {
@@ -26,16 +26,6 @@ const getReadlinePromise = (query) => {
 const config = {
     headers: {"Accept-Encoding": "gzip,deflate,compress"}
 };
-
-// const getUserId =  async (Type) => {
-//   const query = "Enter userId";
-//   const result = await getReadlinePromise(query).then((id) => Type(id));
-//   rl.close();
-//   return result;
-// }
-//
-// getUserId(Number)
-//     .then((r) => console.log("R ", r));
 
 const applyCommentsLimit = (commentsByPostIdUrl) => {
     return `${commentsByPostIdUrl}&_limit=${COMMENTS_LIMIT}`;
@@ -63,23 +53,28 @@ const populatePostMap = (posts, postMap) => {
     });
 }
 
-const main =  async (res, req) => {
-  const type = Number;
-  const query = "Enter userId";
+const readUserId = async () => {
+    const idType = Number;
+    const query = "Enter userId: ";
+    const result = await getReadlinePromise(query).then((id) => idType(id));
+    rl.close();
+    userId = result;
+}
 
-  const result = await getReadlinePromise(query).then((id) => type(id));
+const endpoint =  async (res, req) => {
+    await readUserId();
 
+    const userIdSuffix = `users/${userId}`;
+    const postsByUserIdUrl = `${URL_BASE}${userIdSuffix}/posts`;
 
-  rl.close();
-
-  userId = result;
-
-  const userIdSuffix = `users/${userId}`;
-  const postsByUserIdUrl = `${URL_BASE}${userIdSuffix}/posts`;
-  
-  const posts = axios.get(postsByUserIdUrl, config)
+    const posts = axios.get(postsByUserIdUrl, config)
       .then(posts => {
         posts = posts.data;
+
+        if (!posts || posts.length === 0) {
+            res.status(404).json(`Posts not found for user ${userId}`);
+            return;
+        }
 
         let postMap = new Map();
         let resJson = [];
@@ -96,10 +91,9 @@ const main =  async (res, req) => {
 
                 commentsResponses = commentsResponses.map((response) => response.data);
 
-                commentsResponses.forEach((response, index) => {
-                    console.log(index);
-                    let postId = index + 1;
+                commentsResponses.forEach((response, idx) => {
                     if (response) {
+                        let postId = response[0].postId;
                         let post = postMap.get(postId);
                         if (post) {
                           post = {...post, "comments": response};
@@ -107,7 +101,7 @@ const main =  async (res, req) => {
                         }
                     }
                 });
-              res.json(resJson);
+                res.json(resJson);
             }))
             .catch(errors => {
               console.log("Error while fetching comments... ", errors);
@@ -116,6 +110,7 @@ const main =  async (res, req) => {
       })
       .catch((error) => {
           console.log(`Error while fetching user's ${userId} posts`, error);
+          res.status(404).json("Not found");
       });
 
 }
