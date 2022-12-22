@@ -3,66 +3,33 @@ const router = express.Router();
 
 const axios = require("axios");
 
-const readline = require('readline');
-const rl = readline.createInterface(process.stdin, process.stdout);
-
-const URL_BASE = 'https://jsonplaceholder.typicode.com/';
-const COMMENTS_LIMIT = 5;
-let userId;
+const {getAxiosRequest, getCommentsEndpoint, populatePostMap, declareInitials, readUserId} = require("./helpers");
+const {config, URL_BASE} = require("../config");
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
     endpoint(res, req);
 });
 
-const getReadlinePromise = (query) => {
-  return new Promise((resolve, reject) => {
-    rl.question(query, (answer) => {
-      resolve(answer);
-    })
-  });
-}
+const postsNotFound = (posts) => !posts || posts.length === 0;
+const handle404 = (res, message) => res.status(404).json(message);
+const getCommentsAxiosRequest = (postId) =>  getAxiosRequest(getCommentsEndpoint(postId));
 
-const config = {
-    headers: {"Accept-Encoding": "gzip,deflate,compress"}
-};
-
-const applyCommentsLimit = (commentsByPostIdUrl) => {
-    return `${commentsByPostIdUrl}&_limit=${COMMENTS_LIMIT}`;
-};
-
-const getLimitedCommentsUrl = (commentsByPostIdUrl) => {
-    return applyCommentsLimit(commentsByPostIdUrl);
-};
-
-const getCommentsByPostIdUrl = (postId) => {
-    return `${URL_BASE}comments?postId=${postId}`;
-};
-
-const getCommentsEndpoint = (postId) => {
-    return getLimitedCommentsUrl(getCommentsByPostIdUrl(postId))
-}
-
-const getAxiosRequest = (endpoint) => {
-    return axios.get(endpoint, config);
-};
-
-const populatePostMap = (posts, postMap) => {
-    posts.forEach(post => {
-        postMap.set(post.id, post);
+const addCommentsToPosts = (commentsResponses, postMap, resJson) => {
+    commentsResponses.forEach((response) => {
+        if (response) {
+            let postId = response[0].postId;
+            let post = postMap.get(postId);
+            if (post) {
+                post = {...post, "comments": response};
+                resJson.push(post);
+            }
+        }
     });
-}
-
-const readUserId = async () => {
-    const idType = Number;
-    const query = "Enter userId: ";
-    const result = await getReadlinePromise(query).then((id) => idType(id));
-    rl.close();
-    userId = result;
-}
+};
 
 const endpoint =  async (res, req) => {
-    await readUserId();
+    const userId = await readUserId();
 
     const userIdSuffix = `users/${userId}`;
     const postsByUserIdUrl = `${URL_BASE}${userIdSuffix}/posts`;
@@ -71,17 +38,15 @@ const endpoint =  async (res, req) => {
       .then(posts => {
         posts = posts.data;
 
-        if (!posts || posts.length === 0) {
-            res.status(404).json(`Posts not found for user ${userId}`);
+        if (postsNotFound(posts)) {
+            handle404(res, `Posts not found for user ${userId}`);
             return;
         }
 
-        let postMap = new Map();
-        let resJson = [];
-
+        let { postMap, resJson } = declareInitials();
         populatePostMap(posts, postMap);
 
-        const parallelAxiosCommentsRequests = posts.map((post) => getAxiosRequest(getCommentsEndpoint(post.id)));
+        const parallelAxiosCommentsRequests = posts.map((post) => getCommentsAxiosRequest(post.id));
 
         axios.all(parallelAxiosCommentsRequests)
             .then(axios.spread((...commentsResponses) => {
@@ -90,17 +55,7 @@ const endpoint =  async (res, req) => {
                 }
 
                 commentsResponses = commentsResponses.map((response) => response.data);
-
-                commentsResponses.forEach((response, idx) => {
-                    if (response) {
-                        let postId = response[0].postId;
-                        let post = postMap.get(postId);
-                        if (post) {
-                          post = {...post, "comments": response};
-                          resJson.push(post);
-                        }
-                    }
-                });
+                addCommentsToPosts(commentsResponses, postMap, resJson);
                 res.json(resJson);
             }))
             .catch(errors => {
@@ -110,7 +65,7 @@ const endpoint =  async (res, req) => {
       })
       .catch((error) => {
           console.log(`Error while fetching user's ${userId} posts`, error);
-          res.status(404).json("Not found");
+          handle404(res, "Not found");
       });
 
 }
