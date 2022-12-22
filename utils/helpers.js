@@ -54,5 +54,20 @@ const readUserId = async () => {
     return result;
 };
 
-module.exports = { getCommentsEndpoint, getAxiosRequest, populatePostMap, declareInitials, getReadlinePromise, readUserId, getPostsByUserIdUrl };
+
+const addCommentsToPosts = (commentsResponses, postMap, resJson) => {
+    commentsResponses.forEach((response) => {
+        if (response) {
+            let postId = response[0].postId;
+            let post = postMap.get(postId);
+            if (post) {
+                post = {...post, "comments": response};
+                resJson.push(post);
+            }
+        }
+    });
+};
+
+module.exports = { getCommentsEndpoint, getAxiosRequest, populatePostMap, declareInitials, getReadlinePromise,
+    readUserId, getPostsByUserIdUrl, addCommentsToPosts };
 
