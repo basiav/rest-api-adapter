@@ -3,7 +3,7 @@ const router = express.Router();
 
 const axios = require("axios");
 
-const {getAxiosRequest, getCommentsEndpoint, populatePostMap, declareInitials, readUserId, getPostsByUserIdUrl} = require("./helpers");
+const {getAxiosRequest, getCommentsEndpoint, populatePostMap, declareInitials, readUserId, getPostsByUserIdUrl} = require("../utils/helpers");
 const {config} = require("../config");
 
 /* GET home page. */
