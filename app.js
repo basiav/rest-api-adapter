@@ -3,9 +3,15 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+// Automatic website-page-reloading
+const livereload = require("livereload");
+const connectLiveReload = require("connect-livereload");
+
+const locals = require("express/lib/application").locals;
+
+const PORT = process.env.PORT || 3000;
 
 const indexRouter = require('./routes/index');
-const usersRouter = require('./routes/users');
 
 const app = express();
 
@@ -19,9 +25,17 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use(express.urlencoded({extended: true}));
+
 app.use('/', indexRouter);
 app.use('/index', indexRouter);
-app.use('/users', usersRouter);
+
+const liveReloadServer = livereload.createServer();
+liveReloadServer.server.once("connection", () => {
+  setTimeout(() => {
+    liveReloadServer.refresh("/");
+  }, 100);
+});
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
