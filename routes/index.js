@@ -3,8 +3,8 @@ const router = express.Router();
 
 const axios = require("axios");
 
-const {getAxiosRequest, getCommentsEndpoint, populatePostMap, declareInitials, readUserId} = require("./helpers");
-const {config, URL_BASE} = require("../config");
+const {getAxiosRequest, getCommentsEndpoint, populatePostMap, declareInitials, readUserId, getPostsByUserIdUrl} = require("./helpers");
+const {config} = require("../config");
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
@@ -30,9 +30,7 @@ const addCommentsToPosts = (commentsResponses, postMap, resJson) => {
 
 const endpoint =  async (res, req) => {
     const userId = await readUserId();
-
-    const userIdSuffix = `users/${userId}`;
-    const postsByUserIdUrl = `${URL_BASE}${userIdSuffix}/posts`;
+    const postsByUserIdUrl = getPostsByUserIdUrl(userId);
 
     const posts = axios.get(postsByUserIdUrl, config)
       .then(posts => {
@@ -47,8 +45,8 @@ const endpoint =  async (res, req) => {
         populatePostMap(posts, postMap);
 
         const parallelAxiosCommentsRequests = posts.map((post) => getCommentsAxiosRequest(post.id));
-
-        axios.all(parallelAxiosCommentsRequests)
+        // Promise.all using axios
+        const promises = axios.all(parallelAxiosCommentsRequests)
             .then(axios.spread((...commentsResponses) => {
                 if (commentsResponses.length !== postMap.size) {
                     console.log(`Not every post of user ${userId} has been commented`);
@@ -61,7 +59,6 @@ const endpoint =  async (res, req) => {
             .catch(errors => {
               console.log("Error while fetching comments... ", errors);
             });
-
       })
       .catch((error) => {
           console.log(`Error while fetching user's ${userId} posts`, error);

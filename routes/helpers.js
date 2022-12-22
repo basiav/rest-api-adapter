@@ -2,6 +2,11 @@ const axios = require("axios");
 const {URL_BASE, config, COMMENTS_LIMIT} = require("../config");
 const readline = require("readline");
 
+const getPostsByUserIdUrl = (userId) => {
+    const userIdSuffix = `users/${userId}`;
+    return `${URL_BASE}${userIdSuffix}/posts`;
+};
+
 const applyCommentsLimit = (commentsByPostIdUrl) => {
     return `${commentsByPostIdUrl}&_limit=${COMMENTS_LIMIT}`;
 };
@@ -49,5 +54,5 @@ const readUserId = async () => {
     return result;
 };
 
-module.exports = { getCommentsEndpoint, getAxiosRequest, populatePostMap, declareInitials, getReadlinePromise, readUserId };
+module.exports = { getCommentsEndpoint, getAxiosRequest, populatePostMap, declareInitials, getReadlinePromise, readUserId, getPostsByUserIdUrl };
 
