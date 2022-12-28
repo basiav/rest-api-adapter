@@ -22,42 +22,45 @@ router.get('/:userId?', validateUserId, (req, res, next) => {
 
 const postsNotFound = (posts) => !posts || posts.length === 0;
 const handle404 = (res, message) => res.status(404).json(message);
-const getCommentsAxiosRequest = (postId) =>  getAxiosRequest(getCommentsEndpoint(postId));
+const getCommentsAxiosRequest = (postId) => getAxiosRequest(getCommentsEndpoint(postId));
+
+// const parallelCommentsRequest = (res, req, comments)
+
+const handlePostsResponse = (res, req, posts) => {
+    const userId = req.params.userId;
+
+    if (postsNotFound(posts)) {
+        handle404(res, `Posts not found for user ${userId}`);
+        return
+    }
+
+    let { postMap, resJson } = declareInitials();
+    populatePostMap(posts, postMap);
+
+    // Array of requests to be handled parallelly
+    const commentsByPostIdRequests = posts.map((post) => getCommentsAxiosRequest(post.id));
+    // Promise.all using axios
+    axios.all(commentsByPostIdRequests)
+        .then(axios.spread((...commentsResponses) => {
+            if (commentsResponses.length !== postMap.size) {
+                console.log(`Not every post of user ${userId} has been commented`);
+            }
+            addCommentsToPosts(commentsResponses.map((response) => response.data), postMap, resJson);
+            res.json(resJson);
+        }))
+        .catch(commentErrors => {
+            console.log("Error while fetching comments: ", commentErrors);
+        });
+}
 
 const endpoint = (res, req) => {
-    const userId = req.params.userId;
-    const postsByUserIdUrl = getPostsByUserIdUrl(userId);
+    // Posts by user id url
+    const postsUrl = getPostsByUserIdUrl(req.params.userId);
 
-    const posts = axios.get(postsByUserIdUrl, config)
-      .then(posts => {
-        posts = posts.data;
-
-        if (postsNotFound(posts)) {
-            handle404(res, `Posts not found for user ${userId}`);
-            return;
-        }
-
-        let { postMap, resJson } = declareInitials();
-        populatePostMap(posts, postMap);
-
-        const parallelAxiosCommentsRequests = posts.map((post) => getCommentsAxiosRequest(post.id));
-        // Promise.all using axios
-        const promises = axios.all(parallelAxiosCommentsRequests)
-            .then(axios.spread((...commentsResponses) => {
-                if (commentsResponses.length !== postMap.size) {
-                    console.log(`Not every post of user ${userId} has been commented`);
-                }
-                commentsResponses = commentsResponses.map((response) => response.data);
-                addCommentsToPosts(commentsResponses, postMap, resJson);
-                res.json(resJson);
-            }))
-            .catch(commentErrors => {
-              console.log("Error while fetching comments: ", commentErrors);
-            });
-      })
+    axios.get(postsUrl, config)
+      .then(posts => handlePostsResponse(res, req, posts.data))
       .catch((postError) => {
-          console.log(`Error while fetching user's ${userId} posts: `, postError);
-          handle404(res, "Not found");
+          handle404(res, `Not found. Error: ${postError}`);
       });
 }
 
